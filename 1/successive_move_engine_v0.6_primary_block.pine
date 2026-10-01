@@ -1,0 +1,188 @@
+//@version=6
+indicator("Successive Move Engine v0.6 - Primary Block", shorttitle="SME v0.6", overlay=true, max_boxes_count=500, max_lines_count=500, max_labels_count=500)
+
+// Stage 0 (Governor): state only mutated on confirmed bars.
+// v0.5 candle rule (Allan, 2026-09-30):
+//   REFERENCE = the last VALID candle of the current run.
+//   Bear run: valid bear = red candle with WHOLE BODY below the reference LOW (becomes reference).
+//             invalidation = a bull candle CLOSES above the reference HIGH -> flips to bull.
+//   Bull run = mirror. Doji ignored. From flat, the first coloured candle starts a run.
+//
+// v0.6 PRIMARY BLOCK (3-step verification, Allan, 2026-09-30, validated on GBPUSD H1 Sep 25-28):
+//   1. A run is invalidated (flip).
+//   2. The reference candle of the run that just broke becomes a PENDING block (dashed).
+//        broken bear run -> bullish block (blue)   | broken bull run -> bearish block (orange)
+//   3. CONFIRMED when a candle closes beyond the last valid candle of the run BEFORE the broken
+//      one:  bullish block needs a bull close above the prior bull run's last valid HIGH;
+//            bearish block needs a bear close below the prior bear run's last valid LOW.
+//      If the next flip comes first, the pending block is dropped.
+//   Only the last N confirmed blocks are kept. No entry logic yet.
+
+// ── Inputs ──────────────────────────────────────────────────────────────
+showRuns    = input.bool(true, "Run shading (candle-range boxes)")
+showBlocks  = input.bool(true, "Confirmed primary blocks")
+showPending = input.bool(true, "Pending blocks (dashed)")
+maxBlocks   = input.int(3, "Confirmed blocks to keep", minval=1, maxval=20)
+showValid   = input.bool(true, "Dots on valid candles")
+showTable   = input.bool(true, "Current-state table")
+
+// ── State ───────────────────────────────────────────────────────────────
+var int   dir     = 0    //  1 = bull run, -1 = bear run, 0 = none
+var float refHigh = na   // reference = last valid candle of the run
+var float refLow  = na
+var int   refBar  = na
+var int   runLen  = 0
+var box   runBox  = na
+var float runHi   = na
+var float runLo   = na
+var float lastBullRefHigh = na   // last valid HIGH of the most recently broken BULL run
+var float lastBearRefLow  = na   // last valid LOW of the most recently broken BEAR run
+var box   pend    = na           // pending block box
+var int   pendDir = 0            // 1 = bullish block pending, -1 = bearish
+var float pendLvl = na           // close must pass this level to confirm
+var int   pendLvlBar = na        // bar of the candle whose high/low is that level
+var int   lastBullRefBar = na
+var int   lastBearRefBar = na
+var box[] blocks  = array.new<box>()
+var line[] blkLines = array.new<line>()   // 2 lines per confirmed block: level line + vertical break line
+var label[] blkLabels = array.new<label>()  // 1 "BOS" label per confirmed block
+
+// ── Bar classification (close-based; wicks never matter) ────────────────
+isBull  = close > open
+isBear  = close < open
+bodyTop = math.max(open, close)
+bodyBot = math.min(open, close)
+
+bool validNow   = false
+bool flipped    = false
+bool newRun     = false
+bool confirmNow = false
+
+// ── Engine (confirmed bars only) ────────────────────────────────────────
+if barstate.isconfirmed
+    float pH = refHigh
+    float pL = refLow
+    int   pB = refBar
+    if dir == 0
+        if isBull or isBear
+            dir := isBull ? 1 : -1
+            refHigh := high
+            refLow  := low
+            refBar  := bar_index
+            runLen  := 1
+            newRun  := true
+    else if dir == -1
+        if isBull and close > pH
+            flipped := true
+            dir := 1
+            refHigh := high
+            refLow  := low
+            refBar  := bar_index
+            runLen  := 1
+        else if isBear and bodyTop < pL
+            validNow := true
+            refHigh := high
+            refLow  := low
+            refBar  := bar_index
+            runLen  += 1
+    else
+        if isBear and close < pL
+            flipped := true
+            dir := -1
+            refHigh := high
+            refLow  := low
+            refBar  := bar_index
+            runLen  := 1
+        else if isBull and bodyBot > pH
+            validNow := true
+            refHigh := high
+            refLow  := low
+            refBar  := bar_index
+            runLen  += 1
+
+    // step 1+2: a flip drops any old pending block and opens a new one from the broken run's reference
+    if flipped
+        if not na(pend)
+            box.delete(pend)
+            pend := na
+        color zc = dir == 1 ? color.blue : color.orange
+        pendDir := dir
+        if dir == 1
+            pendLvl := lastBullRefHigh     // prior bull run's last valid high (before this flip updates it)
+            pendLvlBar := lastBullRefBar
+            lastBearRefLow := pL           // the bear run that just broke
+            lastBearRefBar := pB
+        else
+            pendLvl := lastBearRefLow
+            pendLvlBar := lastBearRefBar
+            lastBullRefHigh := pH
+            lastBullRefBar := pB
+        pend := box.new(pB, pH, bar_index, pL,
+             border_color=showPending ? color.new(zc, 0) : color(na), border_width=1,
+             border_style=line.style_dashed, bgcolor=color(na), extend=extend.right)
+
+    // step 3: confirmation by a close beyond the level of the run before the broken one
+    if not na(pend) and not na(pendLvl) and pendDir == dir
+        bool ok = (dir == 1 and isBull and close > pendLvl) or (dir == -1 and isBear and close < pendLvl)
+        if ok
+            color bc = dir == 1 ? color.blue : color.orange
+            box.set_border_style(pend, line.style_solid)
+            box.set_border_width(pend, 2)
+            box.set_border_color(pend, showBlocks ? color.new(bc, 0) : color(na))
+            box.set_bgcolor(pend, showBlocks ? color.new(bc, 70) : color(na))
+            // break markers: level line from the candle whose extreme was taken out, plus a thick
+            // vertical line on the breaking candle from that level to where its body closed
+            array.push(blkLines, line.new(pendLvlBar, pendLvl, bar_index, pendLvl, color=color.new(bc, 0), style=line.style_solid, width=2))
+            array.push(blkLines, line.new(bar_index, pendLvl, bar_index, close, color=color.new(bc, 0), width=3))
+            array.push(blkLabels, label.new(bar_index, pendLvl, "BOS " + str.tostring(pendLvl, format.mintick), style=label.style_label_right, color=color.new(bc, 0), textcolor=color.white, size=size.small))
+            array.push(blocks, pend)
+            if array.size(blocks) > maxBlocks
+                box.delete(array.shift(blocks))
+                line.delete(array.shift(blkLines))
+                line.delete(array.shift(blkLines))
+                label.delete(array.shift(blkLabels))
+            pend := na
+            confirmNow := true
+
+    // run shading: one box per run hugging its candles
+    if flipped or newRun
+        color rc = dir == 1 ? color.green : color.red
+        runBox := box.new(bar_index, high, bar_index, low,
+             border_color=color.new(rc, 60), border_width=1,
+             bgcolor=showRuns ? color.new(rc, 88) : color(na))
+        runHi := high
+        runLo := low
+    else if dir != 0 and not na(runBox)
+        runHi := math.max(runHi, high)
+        runLo := math.min(runLo, low)
+        box.set_right(runBox, bar_index)
+        box.set_top(runBox, runHi)
+        box.set_bottom(runBox, runLo)
+
+// ── Visuals ─────────────────────────────────────────────────────────────
+plotshape(showValid and validNow and dir == 1,  "Valid bull", style=shape.circle, location=location.belowbar, color=color.green, size=size.tiny)
+plotshape(showValid and validNow and dir == -1, "Valid bear", style=shape.circle, location=location.abovebar, color=color.red,   size=size.tiny)
+plotshape(confirmNow and dir == 1,  "Bullish block confirmed", style=shape.labelup,   location=location.belowbar, color=color.blue,   text="OB", textcolor=color.white, size=size.tiny)
+plotshape(confirmNow and dir == -1, "Bearish block confirmed", style=shape.labeldown, location=location.abovebar, color=color.orange, text="OB", textcolor=color.white, size=size.tiny)
+
+// Data-window plots so the MCP can read the live state
+plot(dir,     "Dir",     display=display.data_window)
+plot(runLen,  "RunLen",  display=display.data_window)
+plot(refHigh, "RefHigh", display=display.data_window)
+plot(refLow,  "RefLow",  display=display.data_window)
+plot(pendLvl, "PendLvl", display=display.data_window)
+
+var table info = table.new(position.top_right, 2, 6, border_width=1)
+if showTable and barstate.islast
+    table.cell(info, 0, 0, "State", text_color=color.white, bgcolor=color.new(color.gray, 30))
+    table.cell(info, 1, 0, dir == 1 ? "BULL" : dir == -1 ? "BEAR" : "NONE", text_color=color.white, bgcolor=dir == 1 ? color.green : dir == -1 ? color.red : color.gray)
+    table.cell(info, 0, 1, "Valid candles", text_color=color.white, bgcolor=color.new(color.gray, 30))
+    table.cell(info, 1, 1, str.tostring(runLen), text_color=color.white, bgcolor=color.new(color.gray, 30))
+    table.cell(info, 0, 2, "Ref high", text_color=color.white, bgcolor=color.new(color.gray, 30))
+    table.cell(info, 1, 2, na(refHigh) ? "-" : str.tostring(refHigh, format.mintick), text_color=color.white, bgcolor=color.new(color.gray, 30))
+    table.cell(info, 0, 3, "Ref low", text_color=color.white, bgcolor=color.new(color.gray, 30))
+    table.cell(info, 1, 3, na(refLow) ? "-" : str.tostring(refLow, format.mintick), text_color=color.white, bgcolor=color.new(color.gray, 30))
+    table.cell(info, 0, 4, "Pending block", text_color=color.white, bgcolor=color.new(color.gray, 30))
+    table.cell(info, 1, 4, na(pend) ? "-" : (pendDir == 1 ? "BULL > " : "BEAR < ") + (na(pendLvl) ? "n/a" : str.tostring(pendLvl, format.mintick)), text_color=color.white, bgcolor=na(pend) ? color.new(color.gray, 30) : color.new(pendDir == 1 ? color.blue : color.orange, 20))
+    table.cell(info, 0, 5, "Confirmed blocks", text_color=color.white, bgcolor=color.new(color.gray, 30))
+    table.cell(info, 1, 5, str.tostring(array.size(blocks)), text_color=color.white, bgcolor=color.new(color.gray, 30))
