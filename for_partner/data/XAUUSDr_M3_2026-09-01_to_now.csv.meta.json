@@ -1,0 +1,9 @@
+{
+ "symbol": "XAUUSDr",
+ "tf": "M3",
+ "broker_offset_h": 3,
+ "bars": 10395,
+ "sha256_12": "4fbc35b85270",
+ "first_utc1": "2026-09-01 00:00",
+ "last_utc1": "2026-10-01 16:09"
+}

@@ -1,0 +1,4 @@
+SME Baseline v1 - gold forward test package
+Built: 2026-10-02
+Engine/rules: see docs/1_RULES_BASELINE_v1.md
+Backtest reproduction: python code/backtest.py -> M3 180 trades +52.4R | H1 437 trades +117.1R
