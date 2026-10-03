@@ -36,11 +36,16 @@ around that. Nothing in this folder is financial advice and there is no guarante
 | `docs/2_SETUP.md` | Install and set up |
 | `docs/3_FORWARD_TEST_GUIDE.md` | What to do, what to expect, what to send back |
 | `docs/4_BACKTEST_REPORT.md` | The results report: what we tested, what won, what it does and does not prove |
+| `docs/5_VALIDATION_REPORT.md` | (Krypt branch) Cost stress, bootstrap, bias placebo, significance: verdict and weak points |
+| `docs/6_RISKGATE_AND_CHANGES.md` | (Krypt branch) What changed in the runner, the RiskGate limits, proposed forward-test pass criteria |
 | `code/` | The engine, the demo auto-trader, the report tool (all Python) |
 | `data/` | The price data used for the backtests |
 | `expected/` | The exact trades the backtest produced (to compare with) |
 | `reference/` | Full research notes, confirmed examples, the 64-configuration comparison |
 | `logs/` | Created when you run it: every decision the runner makes |
+
+## Extra safety on the `krypt/validation-riskgate` branch
+The runner now has a RiskGate (daily loss cap, drawdown halt, open-risk cap, kill file) and cancels resting orders the moment a position exists. To stop everything at any time, create an empty file named `KILL` in this folder. If it halts itself (`logs/HALT`), read the reason in the file, then delete it to resume. Run `6_run_tests.bat` after any change. Details: `docs/6_RISKGATE_AND_CHANGES.md`.
 
 ## Be honest with yourself about the risks
 - This system **loses about two trades out of three**. Streaks of 10+ losses in a row happened in the backtests. That is normal for it, not a sign it is broken.

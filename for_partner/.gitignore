@@ -1,0 +1,5 @@
+__pycache__/
+backtest_output/
+logs/*
+!logs/.keep
+KILL

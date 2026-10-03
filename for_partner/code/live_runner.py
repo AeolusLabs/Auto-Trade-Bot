@@ -33,10 +33,12 @@ sys.path.insert(0, HERE)
 import config as C  # noqa: E402
 from engine import run  # noqa: E402
 from bias import session_bias, label  # noqa: E402
+from risk_gate import RiskGate  # noqa: E402
 
 LOGS = os.path.join(ROOT, "logs")
 os.makedirs(LOGS, exist_ok=True)
 TRADE = False   # set by --trade
+GATE = None     # RiskGate, created in main()
 
 
 def fmt(ep):
@@ -89,6 +91,21 @@ def compute(bars):
     return state, bias_all[-1]
 
 
+def money_at_stop(entry, sl, volume, si):
+    """Money lost if the stop is hit."""
+    return abs(entry - sl) / si.trade_tick_size * si.trade_tick_value * volume
+
+
+def open_risk(si):
+    """Money at stop of everything we hold: open positions + pending orders (stop-less positions count as unbounded)."""
+    total = 0.0
+    for p in mine_positions():
+        total += money_at_stop(p.price_open, p.sl, p.volume, si) if p.sl else float("inf")
+    for o in mine_orders():
+        total += money_at_stop(o.price_open, o.sl, o.volume_initial, si) if o.sl else float("inf")
+    return total
+
+
 def lots_for(entry, sl, si, balance):
     risk_money = balance * C.RISK_PCT / 100.0
     ticks = abs(entry - sl) / si.trade_tick_size
@@ -134,7 +151,7 @@ def place(w, si, tick, ai):
         return say("missed", f"buy limit {entry}: price already at/through the level (ask {tick.ask})")
     if abs(entry - sl) < stops:
         return say("skip", f"{side} {entry}: stop distance {abs(entry - sl):.2f} is inside the broker minimum {stops:.2f}")
-    lots, risk_money = lots_for(entry, sl, si, ai.balance)
+    lots, risk_money = lots_for(entry, sl, si, min(ai.balance, ai.equity))   # equity too: sizing never grows on floating profit
     if not lots:
         return say("skip", f"{side} {entry}: cannot size the order")
     actual = abs(entry - sl) / si.trade_tick_size * si.trade_tick_value * lots   # money lost if the stop is hit
@@ -142,6 +159,12 @@ def place(w, si, tick, ai):
         return say("skip", f"{side} {entry}: even the smallest lot ({lots}) would risk {actual:.2f} against a target of {risk_money:.2f} "
                            f"- account too small for this stop (use a bigger demo balance or raise RISK_PCT)")
     risk_money = actual   # R in the forward report is measured against the REAL risk at the stop
+    ti = mt5.terminal_info()
+    tick_age = time.time() - (tick.time - C.SERVER_UTC_OFFSET_HOURS * 3600)
+    allowed, why = GATE.allow_entry(min(ai.balance, ai.equity), open_risk(si), actual, tick_age,
+                                    bool(ti and ti.trade_allowed), bool(ti and ti.connected))
+    if not allowed:
+        return say("GATE BLOCKED", f"{side} {entry}: {why}")
     comment = f"S1{side[0]}{w['anchor'][5:16].replace('-', '').replace(' ', '').replace(':', '')}"[:30]
     if not TRADE:
         return say("WOULD PLACE", f"{side} limit {entry} sl {sl} lots {lots} risk {risk_money:.2f} ({w['kind']}, block {w['anchor']})")
@@ -163,13 +186,13 @@ def place(w, si, tick, ai):
     say("PLACED", f"{side} limit {entry} sl {sl} lots {lots} risk {risk_money:.2f} ticket {res.order}")
 
 
-def cancel(o):
+def cancel(o, why=""):
     side = "sell" if o.type == mt5.ORDER_TYPE_SELL_LIMIT else "buy"
     if not TRADE:
-        return say("WOULD CANCEL", f"{side} limit {o.price_open} (ticket {o.ticket})")
+        return say("WOULD CANCEL", f"{side} limit {o.price_open} (ticket {o.ticket}) {why}")
     require_demo()
     res = mt5.order_send({"action": mt5.TRADE_ACTION_REMOVE, "order": o.ticket})
-    say("CANCELLED" if res is not None and res.retcode == mt5.TRADE_RETCODE_DONE else "cancel FAILED", f"{side} limit {o.price_open} ticket {o.ticket}")
+    say("CANCELLED" if res is not None and res.retcode == mt5.TRADE_RETCODE_DONE else "cancel FAILED", f"{side} limit {o.price_open} ticket {o.ticket} {why}")
 
 
 def close_position(p, si, why):
@@ -192,15 +215,37 @@ def manage_position(bars, state, si):
     pos = mine_positions()
     if not pos:
         return False
-    p = pos[0]
-    fill_idx = max((i for i, b in enumerate(bars) if b["ep"] <= p.time), default=None)
-    sell = p.type == mt5.POSITION_TYPE_SELL
-    against = 1 if sell else -1
-    if fill_idx is not None and any(i > fill_idx and d == against for i, d in state["flips"]):
-        close_position(p, si, "run flipped against the trade")
-    else:
-        say("holding", f"{'sell' if sell else 'buy'} position {p.ticket} @ {p.price_open} sl {p.sl}")
+    for p in pos:   # every position, not just the first: several limits can fill in one spike
+        fill_idx = max((i for i, b in enumerate(bars) if b["ep"] <= p.time), default=None)
+        sell = p.type == mt5.POSITION_TYPE_SELL
+        against = 1 if sell else -1
+        if fill_idx is not None and any(i > fill_idx and d == against for i, d in state["flips"]):
+            close_position(p, si, "run flipped against the trade")
+        else:
+            say("holding", f"{'sell' if sell else 'buy'} position {p.ticket} @ {p.price_open} sl {p.sl}")
     return True
+
+
+def guard():
+    """Runs every POLL_SECONDS (not only on a new candle): the fast safety loop.
+    - update the RiskGate with current equity (may trip a halt)
+    - if halted/killed OR a position is open: cancel every pending order of ours at once (baseline rule: one position at a time,
+      so resting limits must not survive a fill - waiting for the next candle close left a window for a second fill)
+    - more than MAX_POSITIONS positions: close the newest extras (reduce-only)
+    - cancel pending orders older than MAX_PENDING_AGE_HOURS"""
+    ai = mt5.account_info()
+    if ai is None:
+        return
+    GATE.update(ai.equity, time.time())
+    si = mt5.symbol_info(C.SYMBOL)
+    pos = mine_positions()
+    stop_new = GATE.killed() or GATE.halted() is not None
+    for o in mine_orders():
+        old = time.time() - (o.time_setup - C.SERVER_UTC_OFFSET_HOURS * 3600) > C.MAX_PENDING_AGE_HOURS * 3600
+        if stop_new or pos or old:
+            cancel(o, "kill/halt" if stop_new else "position open" if pos else "older than MAX_PENDING_AGE_HOURS")
+    for p in sorted(pos, key=lambda x: x.time)[C.MAX_POSITIONS:]:
+        close_position(p, si, f"more than {C.MAX_POSITIONS} position(s) open (reduce-only)")
 
 
 def detect_offset():
@@ -227,9 +272,12 @@ def cycle(bars):
     state, nbias = compute(bars)
     say("new candle", f"{bars[-1]['t']} close {bars[-1]['c']} | next-candle bias {'BULL (buys only)' if nbias == 1 else 'BEAR (sells only)' if nbias == -1 else 'NONE (no trading)'}")
     in_pos = manage_position(bars, state, si)
-    want = [] if (in_pos or nbias == 0) else [o for o in state["orders"] if (o["side"] == "sell" and nbias == -1) or (o["side"] == "buy" and nbias == 1)]
+    stop_new = GATE.killed() or GATE.halted() is not None
+    want = [] if (in_pos or nbias == 0 or stop_new) else [o for o in state["orders"] if (o["side"] == "sell" and nbias == -1) or (o["side"] == "buy" and nbias == 1)]
+    mid = (tick.bid + tick.ask) / 2.0
+    want.sort(key=lambda o: abs(o["entry"] - mid))   # nearest to price first: those fill first, so they get the open-risk budget
     if len(want) > C.MAX_PENDING:
-        say("note", f"{len(want)} armed blocks, keeping the oldest {C.MAX_PENDING}")
+        say("note", f"{len(want)} armed blocks, keeping the {C.MAX_PENDING} nearest to price")
         want = want[:C.MAX_PENDING]
     have = {key("sell" if o.type == mt5.ORDER_TYPE_SELL_LIMIT else "buy", o.price_open, o.sl, si.digits): o for o in mine_orders()}
     wantk = {key(w["side"], w["entry"], w["sl"], si.digits): w for w in want}
@@ -243,7 +291,7 @@ def cycle(bars):
 
 
 def main():
-    global TRADE
+    global TRADE, GATE
     ap = argparse.ArgumentParser()
     ap.add_argument("--trade", action="store_true", help="really place orders (DEMO account only)")
     ap.add_argument("--once", action="store_true", help="run one cycle and stop")
@@ -257,9 +305,11 @@ def main():
     say("start", f"account {ai.login} ({kind}) {C.SYMBOL} mode {'TRADING (demo)' if TRADE else 'DRY RUN - nothing is sent'} risk {C.RISK_PCT}%")
     if TRADE:
         require_demo()
+    GATE = RiskGate(C, os.path.join(LOGS, "risk_state.json"), os.path.join(LOGS, "HALT"), os.path.join(ROOT, "KILL"), log=say)
     last = None
     try:
         while True:
+            guard()
             bars = get_bars(C.WARMUP_BARS)
             if bars is None:
                 say("waiting", "not enough M3 history yet")
@@ -274,6 +324,12 @@ def main():
     except KeyboardInterrupt:
         say("stopped", "by user")
     finally:
+        if TRADE and C.CANCEL_PENDING_ON_EXIT and not a.once:
+            try:
+                for o in mine_orders():
+                    cancel(o, "runner stopping")
+            except Exception as e:   # never mask the original error
+                say("exit cleanup FAILED", f"{type(e).__name__}: {e} - delete pending orders with magic {C.MAGIC} by hand")
         mt5.shutdown()
 
 
