@@ -19,8 +19,10 @@ Reproduce: `python code/validate.py` (about 25 s, no MT5). The detailed tables a
 3. **The edge is concentrated.** Two quarters (2025-Q3 +41R, 2023-Q4 +24R) supply 65R of the 117R. 9 of 13 quarters are positive. **The last three H1 quarters are +18.9R, -0.6R, -0.2R** and the second half of September on M3 is +3.6R (PF 1.06). Recent behaviour looks flat.
 4. **Drawdown will probably exceed the backtest's.** The backtest max drawdown is 11.7R (H1) / 13.1R (M3), but resampling the same trades gives a *median* 20.9R / 15.2R and a 95th percentile of 38R / 28R. At 0.5% risk, 25R = 12.5% of the account. Expect to meet Allan's "stop at 25R" rule in normal variance, so it is a pause-and-review point, not proof of a broken system. Losing streaks of 18-22 are within the 95-99th percentile.
 5. **Fill optimism is the largest unknown.** Limit orders fill on first touch with no queue and no slippage; the cost stress above brackets slippage but cannot replace live fills.
+6. **Heavy tails (added after the first review).** The best 5 of 437 H1 trades supply 65% of the total (+76.2R of +117.1R); without the best 10 the total is +0.0R, and without the best 20 it is -58.1R. On the M3 month the best 5 trades are 106% of the total (+55.5R of +52.4R): without them it is negative. A quiet stretch with no big winner will look like failure, and a lucky stretch will look like success.
+7. **One-sided in the H1 period (added after the first review).** Long trades earned +110.5R (237 trades, PF 1.96) and short trades only +6.5R (200 trades, PF 1.06) while gold went from about 1,940 to 4,366. On the M3 month, when gold fell, shorts led (+35.6R against +16.8R). The edge looks like trend capture, so it needs a regime that is not a one-way bull market before it can be called robust.
 
-**Decision for both owners:** run the demo forward test (stage 3). The pass criteria in `docs/6_RISKGATE_AND_CHANGES.md` section 4 are a proposal to be agreed and fixed before the first trade.
+**Decision for both owners:** run the demo forward test (stage 3), and treat points 6 and 7 as the main risk to the backtest numbers. The pass criteria in `docs/6_RISKGATE_AND_CHANGES.md` section 4 are a proposal to be agreed and fixed before the first trade.
 
 ---
 
@@ -178,3 +180,34 @@ Permutation p-value (shuffled bias total >= real): **0.169**
 
 3 of 5 periods positive
 
+## Addendum: concentration and direction (tables for points 6 and 7)
+
+**Gold H1, 3 years**
+
+### 7. Concentration and direction
+
+| Check | Result |
+|---|---|
+| Best 5 trades | +76.2R = 65% of the total |
+| Total without the best 5 / 10 / 20 | +40.8R / +0.0R / -58.1R |
+| Trades above +5R | 18 of 437 |
+| Long trades | n= 237 total  +110.5R avg +0.466R PF 1.96 |
+| Short trades | n= 200 total    +6.5R avg +0.033R PF 1.06 |
+| Price move over the period | first entry 1940.36, last entry 4366.52 |
+
+A large share of the total from a few trades, and a one-sided result in a trending market, mean the sample is thinner than its trade count suggests.
+
+**XAU M3, Sep 2026**
+
+### 7. Concentration and direction
+
+| Check | Result |
+|---|---|
+| Best 5 trades | +55.5R = 106% of the total |
+| Total without the best 5 / 10 / 20 | -3.1R / -27.5R / -57.4R |
+| Trades above +5R | 8 of 180 |
+| Long trades | n=  78 total   +16.8R avg +0.215R PF 1.40 |
+| Short trades | n= 102 total   +35.6R avg +0.349R PF 1.65 |
+| Price move over the period | first entry 4429.47, last entry 4161.81 |
+
+A large share of the total from a few trades, and a one-sided result in a trending market, mean the sample is thinner than its trade count suggests.

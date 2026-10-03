@@ -47,6 +47,8 @@ Let "forward trades" = closed demo trades after the start date, R measured again
 | Fills vs model | at least 90% of the backtest's trades for the same days have a matching live trade; mean extra slippage per trade <= 0.5 price units |
 | Operational | zero rule violations by the runner (wrong side, missing stop, second position, risk > 1.1x target); zero unexplained gate trips |
 
+Also report (information only, no pass/fail yet): the share of total R from the best 5 trades and the long/short split. The backtest depends heavily on both (see `docs/5_VALIDATION_REPORT.md`, points 6 and 7), so the forward test should show whether that holds.
+
 Failing any row sends the strategy back to research; passing all moves it to **micro-live at minimum size**, then scale-up only with both owners signing off. Nothing here is a guarantee of profit.
 
 ## 5. Not done, on purpose

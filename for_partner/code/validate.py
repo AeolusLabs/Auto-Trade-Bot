@@ -167,6 +167,20 @@ def study(name, bars, offset, base_cost, period_key):
         out.append(f"| {k} | {summ(groups[k])} |")
     pos = sum(1 for v in groups.values() if sum(v) > 0)
     out += ["", f"{pos} of {len(groups)} periods positive", ""]
+
+    srt = sorted(rs, reverse=True)
+    tot = sum(rs)
+    longs = [t["r"] for t in tr if t["side"] == "buy"]
+    shorts = [t["r"] for t in tr if t["side"] == "sell"]
+    out += ["### 7. Concentration and direction", "",
+            "| Check | Result |", "|---|---|",
+            f"| Best 5 trades | {sum(srt[:5]):+.1f}R = {sum(srt[:5]) / tot:.0%} of the total |",
+            f"| Total without the best 5 / 10 / 20 | {tot - sum(srt[:5]):+.1f}R / {tot - sum(srt[:10]):+.1f}R / {tot - sum(srt[:20]):+.1f}R |",
+            f"| Trades above +5R | {sum(1 for r in rs if r > 5)} of {len(rs)} |",
+            f"| Long trades | {summ(longs)} |",
+            f"| Short trades | {summ(shorts)} |",
+            f"| Price move over the period | first entry {tr[0]['entry']:.2f}, last entry {tr[-1]['entry']:.2f} |", "",
+            "A large share of the total from a few trades, and a one-sided result in a trending market, mean the sample is thinner than its trade count suggests.", ""]
     return out
 
 
