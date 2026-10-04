@@ -1,0 +1,160 @@
+<div class="bar"><div class="bar-in">
+  <div class="brand" id="brand"></div>
+  <span class="mode">DEMO TRADING</span>
+  <span class="chip good" id="chip-engine"></span>
+  <div class="sp"></div>
+  <span class="chip" id="chip-store"></span>
+  <span class="chip mute" id="chip-feed"><span class="livedot"></span><span id="feed-txt">live</span><span class="num" id="clock"></span></span>
+  <span class="swrap"><button class="sw" id="top-pause" role="switch" aria-checked="false" aria-label="Pause the whole pack"></button>Pause pack</span>
+  <button class="btn danger" id="top-lock">Lock the den</button>
+</div></div>
+
+<div class="wrap">
+  <div class="lead" id="lead"></div>
+  <div class="tiles" id="tiles"></div>
+  <div class="notice"><span><b>Layout preview with example data.</b> Ridge is the real SME Baseline v1: its backtest figures, charts and trade history are real (gold H1, 2023-09 to 2026-09). Scout, Dusk and Ember are made-up example agents, and every live number, position and decision is simulated. Nothing connects to MetaTrader. Agents, rules and gates you add or edit are saved for real in this page's database.</span><button class="btn sm" id="sim-stale">Simulate feed drop</button></div>
+  <div class="stalebar" id="stalebar" hidden><b>Feed stalled</b><span>Showing the last known values. Stops and limits keep protecting open positions at the broker.</span><button class="btn sm" id="reconnect">Reconnect</button></div>
+
+  <nav class="tabs" role="tablist" id="tabs" aria-label="Sections">
+    <button role="tab" data-tab="pack">Pack</button>
+    <button role="tab" data-tab="agents">Agents</button>
+    <button role="tab" data-tab="record">Track record</button>
+    <button role="tab" data-tab="trading">Trading</button>
+    <button role="tab" data-tab="stats">Statistics</button>
+    <button role="tab" data-tab="risk">Risk and rules</button>
+    <button role="tab" data-tab="strategy">Strategy gates</button>
+    <button role="tab" data-tab="control">Control hub</button>
+  </nav>
+
+  <section class="panel" id="p-pack">
+    <div class="inl" style="justify-content:space-between;margin-bottom:12px"><div class="inl"><h2>Agents</h2><span class="dim" id="pack-count"></span></div><button class="btn" id="pack-add">Add agent</button></div>
+    <div id="pack-empty"></div>
+    <div class="rowscroll" id="row" tabindex="0" role="region" aria-label="Agents, scroll sideways with the arrow keys"></div>
+    <div class="hint" id="hint">Scroll sideways for more agents</div>
+    <div class="command">
+      <div class="card" id="sentinel"></div>
+      <div class="grid">
+        <div class="card"><div class="card-h"><span class="eyebrow">Pack board</span><span class="dim xs">equity</span></div><div class="board" id="board"></div></div>
+        <div class="card"><span class="eyebrow">Spread gate says no</span><div class="blocked" id="blocked"></div></div>
+      </div>
+      <div class="card"><div class="card-h"><span class="eyebrow">The howl</span><span class="dim num" id="perMin"></span></div><div class="howl" id="howl"></div></div>
+    </div>
+  </section>
+
+  <section class="panel" id="p-agents">
+    <div class="layout-ag"><aside class="card" id="ag-list"></aside><div id="ag-editor"></div></div>
+  </section>
+
+  <section class="panel" id="p-record">
+    <div id="rec-empty"></div>
+    <div id="rec-body">
+    <div class="inl" style="margin-bottom:12px"><span class="chip warn">Real backtest</span><h2>Ridge · SME Baseline v1</h2><span class="dim">Other agents have no backtest yet.</span></div>
+    <div class="kpis" id="kpis"></div>
+    <p class="cap" id="kpi-cap"></p>
+    <div class="card" style="margin-top:14px">
+      <div class="card-h"><h2>Growth</h2>
+        <div class="tools">
+          <div class="seg" role="group" aria-label="Metric" id="seg-metric"><button data-m="1" aria-pressed="true">Growth %</button><button data-m="2" aria-pressed="false">Total R</button><button data-m="3" aria-pressed="false">Drawdown %</button></div>
+          <div class="seg" role="group" aria-label="Range" id="seg-range"><button data-r="365" aria-pressed="false">1Y</button><button data-r="730" aria-pressed="false">2Y</button><button data-r="0" aria-pressed="true">All</button></div>
+        </div></div>
+      <div class="chartbox" id="gbox"><svg class="ch" id="growth" viewBox="0 0 900 300" width="100%" role="img" aria-label="Backtest track record chart"></svg><div class="tip" id="gtip"></div></div>
+      <div class="inl" style="margin-top:8px"><span class="dim xs">Each point is a closed trade. Growth assumes 0.5% risk per trade, compounded.</span><button class="btn ghost sm" id="g-table-btn">Table view</button></div>
+      <div class="tw" id="g-table" hidden></div>
+    </div>
+    <div class="grid g2" style="margin-top:14px">
+      <div class="card"><div class="card-h"><h2>Monthly return, %</h2><span class="dim xs">by close month, 0.5% risk compounded</span></div><div class="tw"><table class="mg" id="mg"></table></div></div>
+      <div class="card"><div class="card-h"><h2>What the backtest depends on</h2><span class="chip warn">Read before trusting the total</span></div><div class="grid" id="depends" style="gap:14px"></div></div>
+    </div>
+    <div class="card" style="margin-top:14px"><div class="card-h"><h2>Net R per quarter</h2><span class="dim xs">by entry quarter, real</span></div><div class="chartbox"><svg class="ch" id="qchart" viewBox="0 0 520 220" width="100%" role="img" aria-label="Net R per quarter"></svg><div class="tip" id="qtip"></div></div><p class="sec xs" id="qnote" style="margin-top:6px"></p></div>
+    </div>
+  </section>
+
+  <section class="panel" id="p-trading">
+    <div class="card"><div class="card-h"><h2>Open positions</h2><span class="chip">Example</span></div><div class="tw"><table id="pos-table"></table></div></div>
+    <div class="grid g2e" style="margin-top:14px">
+      <div class="card"><div class="card-h"><h2>Armed blocks, Ridge</h2><span class="chip">Example</span></div>
+        <div class="tw"><table><tr><th>Side</th><th class="r">Entry</th><th class="r">Stop</th><th class="r">Risk</th><th>Order</th></tr>
+          <tr><td>sell</td><td class="r num">4181.40</td><td class="r num">4185.12</td><td class="r num">$51</td><td><span class="chip">Not placed, position open</span></td></tr>
+          <tr><td>sell</td><td class="r num">4188.75</td><td class="r num">4193.90</td><td class="r num">$50</td><td><span class="chip">Not placed, position open</span></td></tr>
+          <tr><td>sell</td><td class="r num">4176.05</td><td class="r num">4178.60</td><td class="r num">$49</td><td><span class="chip">Not placed, position open</span></td></tr></table></div>
+        <p class="dim xs" style="margin-top:10px">While a position is open the runner cancels every resting order within 5 seconds.</p></div>
+      <div class="card"><div class="card-h"><h2>Session bias, Ridge</h2><span class="chip">Example</span></div>
+        <div style="font-size:24px;font-weight:600">New York <span class="neg">BEAR</span></div>
+        <p class="sec" style="margin:6px 0 12px">Sells only. London closed lower, so New York is judged BEAR for the whole session.</p>
+        <div class="kv"><div><span>Runner</span><span class="chip good">● Running</span></div><div><span>Last M3 candle</span><span class="num">13:42 UTC</span></div><div><span>Broker clock offset</span><span class="num">UTC+3 ok</span></div><div><span>Algo trading</span><span>on</span></div></div></div>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <div class="card-h"><h2>Trade history, Ridge</h2><div class="tools"><span class="dim xs">Backtest, real</span>
+        <div class="seg" role="group" aria-label="Filter" id="seg-hist"><button data-f="all" aria-pressed="true">All</button><button data-f="long" aria-pressed="false">Long</button><button data-f="short" aria-pressed="false">Short</button><button data-f="win" aria-pressed="false">Wins</button><button data-f="loss" aria-pressed="false">Losses</button></div></div></div>
+      <div class="tw"><table id="hist"></table></div>
+      <div class="inl" style="margin-top:10px"><button class="btn sm" id="hist-more">Show 15 more</button><span class="dim xs" id="hist-count"></span></div>
+    </div>
+  </section>
+
+  <section class="panel" id="p-stats">
+    <div class="grid g3">
+      <div class="card"><h2 style="margin-bottom:8px">Trades</h2><div class="kv" id="kv1"></div></div>
+      <div class="card"><h2 style="margin-bottom:8px">Wins and losses</h2><div class="kv" id="kv2"></div></div>
+      <div class="card"><h2 style="margin-bottom:8px">Risk and time</h2><div class="kv" id="kv3"></div></div>
+    </div>
+    <div class="grid g2e" style="margin-top:14px">
+      <div class="card"><div class="card-h"><h2>Net R by weekday</h2><span class="dim xs">entry day, trades above bars</span></div><div class="chartbox"><svg class="ch" id="wk" viewBox="0 0 520 220" width="100%" role="img" aria-label="Net R by weekday"></svg><div class="tip" id="wktip"></div></div></div>
+      <div class="card"><div class="card-h"><h2>Net R by entry hour, UTC</h2><span class="dim xs">hover for trade count</span></div><div class="chartbox"><svg class="ch" id="hr" viewBox="0 0 520 220" width="100%" role="img" aria-label="Net R by entry hour"></svg><div class="tip" id="hrtip"></div></div></div>
+    </div>
+  </section>
+
+  <section class="panel" id="p-risk">
+    <div class="scope-bar"><label class="lbl" for="rules-scope">Rules for</label><select class="sel" id="rules-scope" style="max-width:300px"></select><span class="dim xs">Each agent has its own rules. Pack rules apply to the whole install.</span></div>
+    <div id="rules-host"></div>
+    <div class="grid g2e" style="margin-top:14px">
+      <div class="card"><div class="card-h"><h2>Prop-firm profile</h2><span class="chip">Inactive</span></div>
+        <p class="sec" style="margin-bottom:10px">No firm chosen. When one is, its rules load as data and the engine takes the stricter of the firm's limits and ours, plus a safety buffer.</p>
+        <div class="tw"><table><tr><th>Rule type</th><th>Status</th></tr><tr><td>Daily loss (equity, firm reset time)</td><td class="dim">waiting for a preset</td></tr><tr><td>Max loss, static or trailing</td><td class="dim">waiting for a preset</td></tr><tr><td>Consistency, minimum trading days</td><td class="dim">waiting for a preset</td></tr><tr><td>News and weekend restrictions</td><td class="dim">waiting for a preset</td></tr></table></div>
+        <div class="notice" style="margin-top:12px"><span>Our numbers are estimates. The firm's own tracker is authoritative. Check each firm's terms on automated trading before connecting.</span></div></div>
+      <div class="card"><div class="card-h"><h2>Exposure, all agents</h2><span class="chip">Example</span></div><div class="tw"><table id="expo"></table></div>
+        <p class="dim xs" style="margin-top:10px">Correlated pairs are grouped into one bet here, for example long EURUSD, long GBPUSD and short USDCHF all lean on USD.</p></div>
+    </div>
+    <div class="card" style="margin-top:14px"><div class="card-h"><h2>Execution quality</h2><span class="chip">Example</span></div>
+      <div class="tw"><table><tr><th>Measure</th><th class="r">Live</th><th class="r">Backtest model</th></tr>
+        <tr><td>Spread at entry, median</td><td class="r num">0.14</td><td class="r num">0.20</td></tr><tr><td>Spread at entry, 95th pct</td><td class="r num">0.31</td><td class="r num dim">none</td></tr>
+        <tr><td>Slippage per trade, mean</td><td class="r num">+0.18</td><td class="r num">0.00</td></tr><tr><td>Fills matching the backtest</td><td class="r num">94%</td><td class="r num dim">target 90%+</td></tr>
+        <tr><td>Rejects</td><td class="r num">1 of 41</td><td class="r num dim">none</td></tr><tr><td>Ping to broker</td><td class="r num">38 ms</td><td class="r num dim">none</td></tr></table></div></div>
+  </section>
+
+  <section class="panel" id="p-strategy">
+    <div class="inl" style="justify-content:space-between;margin-bottom:12px"><div><h2>Strategy lab</h2><p class="dim xs">Strategies are tested here, ranked by the research agent, and the best performer is recommended for an agent. Agents trade what you assign.</p></div></div>
+    <div id="lab-reco"></div>
+    <div class="card" id="lab-board" style="margin-top:14px"></div>
+    <div id="lab-add"></div>
+    <div id="lab-detail"></div>
+  </section>
+
+  <section class="panel" id="p-control">
+    <div class="notice inline"><span><b>Reduce-only.</b> Nothing here can open or increase a position. The command set has no such verb. Commands are signed, acknowledged per ticket and written to the audit log. Buttons simulate the flow.</span></div>
+    <div class="ctl">
+      <div class="card act"><div class="card-h" style="margin:0"><h2>Pause new entries</h2><span class="chip good" id="pause-chip">Entries enabled</span></div>
+        <p>Sets <span class="num">trading_enabled=false</span> for every agent. Open positions keep their stops. A strategy that does not read the guard flag cannot be soft-paused.</p>
+        <div class="inl"><button class="sw" id="pause-sw" role="switch" aria-checked="false" aria-label="Pause new entries for the whole pack"></button><span class="sec">Pause the pack</span></div></div>
+      <div class="card act tall"><div class="card-h" style="margin:0"><h2>Rest one agent</h2><span class="chip" id="rest-chip">0 resting</span></div>
+        <p>Pauses entries for a single strategy (its magic number). Its open position keeps its stop.</p><div id="rest-list"></div></div>
+      <div class="card act"><div class="card-h" style="margin:0"><h2>Cancel pending orders</h2><span class="chip">0 pending</span></div>
+        <p>Removes resting limit orders by ticket. Needs the master login on the host.</p>
+        <div class="inl"><button class="btn" disabled>Cancel pending</button><span class="dim xs">Nothing to cancel: the runner already clears resting orders while a position is open.</span></div></div>
+      <div class="card act"><div class="card-h" style="margin:0"><h2>Flatten</h2><span class="chip warn" id="flat-chip"></span></div>
+        <p>Closes positions at market, retrying until flat or the retry budget runs out. Partial results are reported as they are.</p>
+        <div class="inl"><label class="xs dim" for="scope">Scope</label><select class="sel" id="scope" style="width:auto"></select><button class="btn danger" id="flat-btn">Flatten</button></div></div>
+      <div class="card act"><div class="card-h" style="margin:0"><h2>Kill</h2><span class="chip good" id="kill-chip">Not triggered</span></div>
+        <p>Pause flag, cancel pending, flatten loop, then stop the account's terminal if positions remain. Restarting needs a person.</p>
+        <div class="inl"><button class="btn danger" id="kill-btn">Kill</button><button class="btn ghost" id="reset-btn" hidden>Reset demo</button></div></div>
+    </div>
+    <div id="confirm-slot"></div>
+    <div class="card" style="margin-top:14px" id="res-card" hidden>
+      <div class="card-h"><h2 id="res-title">Result</h2><span class="chip info" id="res-chip">sending</span></div>
+      <div class="tw"><table id="res"></table></div>
+      <div class="legend xs" style="margin-top:12px"><span class="chip">sent</span><span class="chip info">acked</span><span class="chip good">✓ executed</span><span class="chip warn">▲ partially executed</span><span class="chip crit">✕ failed</span><span class="chip crit">✕ unreachable</span></div>
+      <p class="sec xs" style="margin-top:8px" id="res-foot" aria-live="polite"></p>
+    </div>
+    <div class="card" style="margin-top:14px"><div class="card-h"><h2>Command and change log</h2><span class="dim xs">append-only</span></div><div class="tw"><table id="audit"></table></div></div>
+  </section>
+</div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
