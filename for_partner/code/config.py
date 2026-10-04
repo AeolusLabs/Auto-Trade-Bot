@@ -26,3 +26,10 @@ MAX_POSITIONS = 1                  # baseline rule: one position at a time; extr
 STALE_TICK_SECONDS = 300           # no new orders if the latest quote is older than this
 MAX_PENDING_AGE_HOURS = 24         # cancel pending orders older than this (the baseline has no expiry; this bounds orphans)
 CANCEL_PENDING_ON_EXIT = True      # cancel our pending orders when the runner stops (Ctrl+C or crash with a Python error)
+
+# ---- More RiskGate limits and alerts (ideas from imikerussell/beebots, MIT; see docs/6_RISKGATE_AND_CHANGES.md) ----
+RETIRE_AT_PCT = 80                 # equity at or below this % of the starting equity: RETIRED file, stopped until a person deletes it
+MAX_TRADES_PER_DAY = 20            # entries per UTC day (backtest averaged about 8.6 per active day on M3); circuit breaker, not a tuned limit
+COST_BUDGET_PCT_DAY = 1.0          # estimated spread cost of the day's entries, % of equity; resets 00:00 UTC
+COOLDOWN_MINUTES = 0               # minimum minutes between entries; 0 = off (the baseline has none)
+# Alerts: set ATB_ALERT_WEBHOOK_URL (https) or ATB_TELEGRAM_BOT_TOKEN + ATB_TELEGRAM_CHAT_ID in the environment. Never commit them.

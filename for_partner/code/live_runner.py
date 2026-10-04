@@ -34,6 +34,8 @@ import config as C  # noqa: E402
 from engine import run  # noqa: E402
 from bias import session_bias, label  # noqa: E402
 from risk_gate import RiskGate  # noqa: E402
+from redact import redact_string, mask_account  # noqa: E402
+import alerts  # noqa: E402
 
 LOGS = os.path.join(ROOT, "logs")
 os.makedirs(LOGS, exist_ok=True)
@@ -47,6 +49,7 @@ def fmt(ep):
 
 def say(event, detail=""):
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    detail = redact_string(detail)   # secrets, IPs, e-mails and long blobs never reach the console or logs/decisions.csv
     print(f"{now}  {event:14} {detail}", flush=True)
     path = os.path.join(LOGS, "decisions.csv")
     new = not os.path.exists(path)
@@ -161,10 +164,11 @@ def place(w, si, tick, ai):
     risk_money = actual   # R in the forward report is measured against the REAL risk at the stop
     ti = mt5.terminal_info()
     tick_age = time.time() - (tick.time - C.SERVER_UTC_OFFSET_HOURS * 3600)
+    spread_cost = (tick.ask - tick.bid) / si.trade_tick_size * si.trade_tick_value * lots
     allowed, why = GATE.allow_entry(min(ai.balance, ai.equity), open_risk(si), actual, tick_age,
-                                    bool(ti and ti.trade_allowed), bool(ti and ti.connected))
+                                    bool(ti and ti.trade_allowed), bool(ti and ti.connected), est_cost=spread_cost, now_ts=time.time())
     if not allowed:
-        return say("GATE BLOCKED", f"{side} {entry}: {why}")
+        return say("GATE BLOCKED", f"wanted {side} limit {entry}, code said no: {why}")
     comment = f"S1{side[0]}{w['anchor'][5:16].replace('-', '').replace(' ', '').replace(':', '')}"[:30]
     if not TRADE:
         return say("WOULD PLACE", f"{side} limit {entry} sl {sl} lots {lots} risk {risk_money:.2f} ({w['kind']}, block {w['anchor']})")
@@ -239,6 +243,9 @@ def guard():
     GATE.update(ai.equity, time.time())
     si = mt5.symbol_info(C.SYMBOL)
     pos = mine_positions()
+    tk = mt5.symbol_info_tick(C.SYMBOL)
+    if si and tk:   # count each new position once toward the daily trade cap and cost budget
+        GATE.note_positions([(p.ticket, (tk.ask - tk.bid) / si.trade_tick_size * si.trade_tick_value * p.volume) for p in pos], time.time())
     stop_new = GATE.killed() or GATE.halted() is not None
     for o in mine_orders():
         old = time.time() - (o.time_setup - C.SERVER_UTC_OFFSET_HOURS * 3600) > C.MAX_PENDING_AGE_HOURS * 3600
@@ -302,10 +309,10 @@ def main():
     mt5.symbol_select(C.SYMBOL, True)
     ai = mt5.account_info()
     kind = "DEMO" if ai.trade_mode == mt5.ACCOUNT_TRADE_MODE_DEMO else "NOT DEMO"
-    say("start", f"account {ai.login} ({kind}) {C.SYMBOL} mode {'TRADING (demo)' if TRADE else 'DRY RUN - nothing is sent'} risk {C.RISK_PCT}%")
+    say("start", f"account {mask_account(ai.login)} ({kind}) {C.SYMBOL} mode {'TRADING (demo)' if TRADE else 'DRY RUN - nothing is sent'} risk {C.RISK_PCT}%")
     if TRADE:
         require_demo()
-    GATE = RiskGate(C, os.path.join(LOGS, "risk_state.json"), os.path.join(LOGS, "HALT"), os.path.join(ROOT, "KILL"), log=say)
+    GATE = RiskGate(C, os.path.join(LOGS, "risk_state.json"), os.path.join(LOGS, "HALT"), os.path.join(ROOT, "KILL"), log=say, alert=alerts.notify)
     last = None
     try:
         while True:

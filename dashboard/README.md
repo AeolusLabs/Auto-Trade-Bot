@@ -1,4 +1,7 @@
-# Auto Trade Bot dashboard preview
+# Auto Trade Bot dashboard previews
+
+- `auto-trade-bot-pack.html`: the wolf-pack view (three strategy wolves, the Sentinel guardian, pack board, decision stream, reduce-only controls). Ridge is the real SME Baseline v1; Scout and Dusk are example slots; all live numbers are simulated.
+- `auto-trade-bot.html`: the track-record and control-hub view described below.
 
 A single-file layout preview of the dashboard and control hub (open `auto-trade-bot.html` in a browser; no server needed).
 

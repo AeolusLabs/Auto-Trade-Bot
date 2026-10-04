@@ -25,10 +25,21 @@ Fail-closed: if it cannot decide, there is no new order.
 - The limits are **circuit breakers, not tuned parameters**: worst backtest day was -8.6R (4.3%), worst drawdown 13.1R (6.5%).
   **Expect the gate to trip occasionally** (see `docs/5_VALIDATION_REPORT.md`, point 4): it is a pause-and-review point.
 
+### 2b. Added after reviewing imikerussell/beebots (MIT; ideas ported, nothing copied wholesale)
+
+- **Retire line** `RETIRE_AT_PCT` = 80: equity at or below 80% of the starting equity writes `logs/RETIRED`. Unlike a HALT it never lifts on recovery: a person deletes the file after a review (the HALT file may also exist and needs deleting too).
+- **Daily trade cap** `MAX_TRADES_PER_DAY` = 20 and **daily cost budget** `COST_BUDGET_PCT_DAY` = 1.0% of equity (estimated spread of each entry). Both reset at 00:00 UTC and alert once when they trip. New positions are counted once each by the fast guard loop.
+- **Order cooldown** `COOLDOWN_MINUTES` (0 = off, because the baseline has none).
+- **Plain reasons:** a refusal is logged as `wanted sell limit 4172.31, code said no: trade_cap 20 of 20 used today`, which is the shape of the dashboard's decision events.
+- **Redaction** (`code/redact.py`): every console and `logs/decisions.csv` line passes through it. Keys, passwords, tokens, webhook URLs, e-mails, IPs, home paths and long blobs are masked; prices and times are not. The account number is shown with only its last 3 digits.
+- **Alerts** (`code/alerts.py`): HALT, RETIRED and trade-cap trips go to Discord, Telegram or a generic webhook. Set `ATB_ALERT_WEBHOOK_URL` or `ATB_TELEGRAM_BOT_TOKEN` and `ATB_TELEGRAM_CHAT_ID` as environment variables (never in the repo). https only, redacted, one identical title per 10 minutes, and a dead webhook never stops the runner.
+- **Not taken from beebots, on purpose:** the AI decision model, the "Beekeeper" that rewrites rules after losses (that is re-tuning on recent results, which `PLATFORM_PLAN.md` section 15.4 forbids), and the "force an entry after being flat too long" rule.
+
 ## 3. Tests (no MT5 needed, run `6_run_tests.bat`)
 
-- `code/test_risk_gate.py`: 9 checks (day roll, drawdown across days, halt and re-enable, restart persistence, kill file, risk cap, fail-closed inputs).
-- `code/test_runner_sim.py`: 8 checks against a **fake MetaTrader5** module: order carries a stop and about 0.5% risk, the 4th order is refused by the cap, a position cancels all pendings, extra positions are closed, halt and kill block orders, stale quote and Algo-off block orders, old pendings are cancelled.
+- `code/test_risk_gate.py`: 14 checks (day roll, drawdown across days, halt and re-enable, restart persistence, kill file, risk cap, fail-closed inputs).
+- `code/test_redact_alerts.py`: 7 checks (prices untouched, secrets masked, deep redaction, https only, dedupe, a dead webhook never raises).
+- `code/test_runner_sim.py`: 11 checks against a **fake MetaTrader5** module: order carries a stop and about 0.5% risk, the 4th order is refused by the cap, a position cancels all pendings, extra positions are closed, halt and kill block orders, stale quote and Algo-off block orders, old pendings are cancelled.
 - **These prove our logic, not the broker.** Order sending on a real demo is still untested (Allan's note stands). Do the first-day manual checks in `docs/3_FORWARD_TEST_GUIDE.md`.
 - `python code/validate.py` runs the stress and significance study.
 

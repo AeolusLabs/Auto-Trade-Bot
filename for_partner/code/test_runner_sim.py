@@ -170,6 +170,39 @@ def test_old_pending_orders_are_cancelled():
     assert len(W.orders) == 0
 
 
+def last_log():
+    with open(os.path.join(TMP, "decisions.csv")) as f:
+        return f.read()
+
+
+def test_trade_cap_refuses_with_a_plain_reason():
+    fresh()
+    old = C.MAX_TRADES_PER_DAY
+    C.MAX_TRADES_PER_DAY = 1
+    try:
+        L.GATE.note_positions([(9, 0.1)], time.time())
+        place(4010.0, 4015.0)
+        assert len(W.orders) == 0
+        assert "code said no: trade_cap" in last_log()
+    finally:
+        C.MAX_TRADES_PER_DAY = old
+
+
+def test_new_positions_are_counted_once_by_the_guard():
+    fresh()
+    pos(1, time.time())
+    L.guard()
+    L.guard()
+    assert L.GATE.s["trades_today"] == 1
+
+
+def test_log_lines_are_redacted():
+    fresh()
+    L.say("probe", "password=hunter2 from 203.0.113.9 price 4172.31")
+    text = last_log()
+    assert "hunter2" not in text and "203.0.113.9" not in text and "4172.31" in text
+
+
 if __name__ == "__main__":
     import io
     import contextlib
